@@ -189,7 +189,7 @@ group_decrease_handler = on_notice(priority=1, block=False)
 
 
 @group_decrease_handler.handle()
-async def handle_group_decrease(event: GroupDecreaseNoticeEvent):
+async def handle_group_decrease(bot: Bot, event: GroupDecreaseNoticeEvent):
     # 检查事件类型
     if event.sub_type in ["leave", "kick"]:
         group_id = str(event.group_id)
@@ -198,9 +198,17 @@ async def handle_group_decrease(event: GroupDecreaseNoticeEvent):
         group_data = data["groups"].get(group_id, {})
         if group_data.get("exit_records", {}).get("enabled", False):
             record_exit(user_id, group_id)
-            await group_decrease_handler.finish(f"用户 {user_id} 离开了我们，再见，或许再也不见。")
+            try:
+                user_name = (await bot.get_stranger_info(user_id=int(user_id)))["nickname"] or "未知昵称"
+            except Exception:
+                user_name = "未知昵称"
+            await group_decrease_handler.finish(f"群友「{user_name}」({user_id})离开了我们，再见，或许再也不见。")
         else:
-            await group_decrease_handler.finish(f"用户 {user_id} 离开了我们，祝她幸福。")
+            try:
+                user_name = (await bot.get_stranger_info(user_id=int(user_id)))["nickname"] or "未知昵称"
+            except Exception:
+                user_name = "未知昵称"
+            await group_decrease_handler.finish(f"群友「{user_name}」({user_id})离开了我们，祝她幸福。")
 
 
 # 处理群请求事件
@@ -215,7 +223,7 @@ async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
         return
     group_id = str(event.group_id)
     user_id = str(event.user_id)
-    comment = event.comment.lower()
+    comment = event.comment.lower()  # type: ignore
     group_data = data["groups"].get(group_id, {})
     # 检查群组是否开启了退群记录功能
     if group_data.get("exit_records", {}).get("enabled", False):
