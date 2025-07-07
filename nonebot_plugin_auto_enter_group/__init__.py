@@ -202,7 +202,7 @@ async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
         return
     group_id = str(event.group_id)
     user_id = str(event.user_id)
-    comment = event.comment  # type: ignore
+    comment = getattr(event, "comment", "") or ""
     original_comment = comment
     comment_lower = comment.lower()
     group_data = data["groups"].get(group_id, {})
