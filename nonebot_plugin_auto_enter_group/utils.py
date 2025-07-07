@@ -25,9 +25,6 @@ def load_data():
                 if "keywords" in group_data:
                     group_data["allowed_keywords"] = group_data.pop("keywords")
                     migrated = True
-                if "disallowed_keywords" not in group_data:
-                    group_data["disallowed_keywords"] = []
-                    migrated = True
             if migrated:
                 save_data(data)
                 logger.info("数据已迁移。")
@@ -58,7 +55,7 @@ def add_keyword_allowed(group_id, keyword):
     if not data:
         load_data()
     group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "disallowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
+        group_id, {"allowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
     )
     if keyword not in group_data["allowed_keywords"]:  # 防止重复添加
         group_data["allowed_keywords"].append(keyword)
@@ -76,7 +73,7 @@ def remove_keyword_allowed(group_id, keyword):
     if not data:
         load_data()
     group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "disallowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
+        group_id, {"allowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
     )
     if keyword in group_data["allowed_keywords"]:
         group_data["allowed_keywords"].remove(keyword)
@@ -85,42 +82,6 @@ def remove_keyword_allowed(group_id, keyword):
         return True
     else:
         logger.warning(f"允许关键词'{keyword}'不在{group_id}的关键词列表中。")
-        return False
-
-
-def add_keyword_disallowed(group_id, keyword):
-    """向指定群组添加拒绝关键词"""
-    global data
-    if not data:
-        load_data()
-    group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "disallowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
-    )
-    if keyword not in group_data["disallowed_keywords"]:  # 防止重复添加
-        group_data["disallowed_keywords"].append(keyword)
-        save_data(data)  # 保存更新后的数据
-        logger.info(f"{group_id}添加拒绝关键词'{keyword}'成功。")
-        return True
-    else:
-        logger.warning(f"拒绝关键词'{keyword}'已在{group_id}的关键词列表中。")
-        return False
-
-
-def remove_keyword_disallowed(group_id, keyword):
-    """从指定群组删除拒绝关键词"""
-    global data
-    if not data:
-        load_data()
-    group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "disallowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
-    )
-    if keyword in group_data["disallowed_keywords"]:
-        group_data["disallowed_keywords"].remove(keyword)
-        save_data(data)
-        logger.info(f"{group_id}删除拒绝关键词'{keyword}'成功。")
-        return True
-    else:
-        logger.warning(f"拒绝关键词'{keyword}'不在{group_id}的关键词列表中。")
         return False
 
 
@@ -144,7 +105,7 @@ def enable_exit_recording(group_id: str, enabled: bool):
     if not data:
         load_data()
     group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "disallowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
+        group_id, {"allowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
     )
     group_data["exit_records"]["enabled"] = enabled
     save_data(data)

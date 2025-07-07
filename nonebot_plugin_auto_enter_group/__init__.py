@@ -7,12 +7,10 @@ from nonebot.plugin import PluginMetadata
 
 from .utils import (
     add_keyword_allowed,
-    add_keyword_disallowed,
     enable_exit_recording,
     load_data,
     record_exit,
     remove_keyword_allowed,
-    remove_keyword_disallowed,
 )
 
 # 插件元数据
@@ -49,16 +47,11 @@ get_keywords = on_command(
 async def handle_get_keywords(event: GroupMessageEvent):
     group_id = str(event.group_id)
     allowed_keywords = data["groups"].get(group_id, {}).get("allowed_keywords", [])
-    disallowed_keywords = data["groups"].get(group_id, {}).get("disallowed_keywords", [])
     message = ""
     if allowed_keywords:
         message += f"当前允许入群关键词：{', '.join(allowed_keywords)}\n"
     else:
         message += "当前没有允许入群关键词\n"
-    if disallowed_keywords:
-        message += f"当前拒绝入群关键词：{', '.join(disallowed_keywords)}"
-    else:
-        message += "当前没有拒绝入群关键词"
     await get_keywords.finish(message)
 
 
@@ -106,50 +99,6 @@ async def handle_remove_allowed(event: GroupMessageEvent, args: Message = Comman
         await remove_allowed_keyword.finish(f"允许关键词 '{keyword}' 不存在于当前群组。")
 
 
-# 添加拒绝关键词命令
-add_disallowed_keyword = on_command(
-    "添加拒绝关键词",
-    priority=5,
-    permission=SUPERUSER | GROUP_ADMIN | GROUP_OWNER,
-    block=True,
-)
-
-
-@add_disallowed_keyword.handle()
-async def handle_add_disallowed(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = str(event.group_id)
-    keyword = args.extract_plain_text().strip().lower()
-    if not keyword:
-        await add_disallowed_keyword.finish("关键词不能为空，请输入有效的关键词。")
-        return
-    if add_keyword_disallowed(group_id, keyword):
-        await add_disallowed_keyword.finish(f"拒绝关键词 '{keyword}' 已添加到当前群组。")
-    else:
-        await add_disallowed_keyword.finish(f"拒绝关键词 '{keyword}' 已存在于当前群组。")
-
-
-# 删除拒绝关键词命令
-remove_disallowed_keyword = on_command(
-    "删除拒绝关键词",
-    priority=5,
-    permission=SUPERUSER | GROUP_ADMIN | GROUP_OWNER,
-    block=True,
-)
-
-
-@remove_disallowed_keyword.handle()
-async def handle_remove_disallowed(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = str(event.group_id)
-    keyword = args.extract_plain_text().strip().lower()
-    if not keyword:
-        await remove_disallowed_keyword.finish("关键词不能为空，请输入有效的关键词。")
-        return
-    if remove_keyword_disallowed(group_id, keyword):
-        await remove_disallowed_keyword.finish(f"拒绝关键词 '{keyword}' 已从当前群组删除。")
-    else:
-        await remove_disallowed_keyword.finish(f"拒绝关键词 '{keyword}' 不存在于当前群组。")
-
-
 # 启用退群记录命令
 enable_exit_cmd = on_command(
     "启用退群黑名单",
@@ -163,8 +112,8 @@ enable_exit_cmd = on_command(
 async def handle_enable_exit(event: GroupMessageEvent):
     group_id = str(event.group_id)
     enable_exit_recording(group_id, True)
-    await enable_exit_cmd.finish(f"群 {group_id} 的退群退群黑名单功能已启用。")
-    logger.info(f"群 {group_id} 的退群退群黑名单功能已启用。")
+    await enable_exit_cmd.finish(f"群 {group_id} 的退群黑名单功能已启用。")
+    logger.info(f"群 {group_id} 的退群黑名单功能已启用。")
 
 
 # 禁用退群记录命令
@@ -180,8 +129,8 @@ disable_exit_cmd = on_command(
 async def handle_disable_exit(event: GroupMessageEvent):
     group_id = str(event.group_id)
     enable_exit_recording(group_id, False)
-    await disable_exit_cmd.finish(f"群 {group_id} 的退群退群黑名单功能已禁用。")
-    logger.info(f"群 {group_id} 的退群退群黑名单功能已禁用。")
+    await disable_exit_cmd.finish(f"群 {group_id} 的退群黑名单功能已禁用。")
+    logger.info(f"群 {group_id} 的退群黑名单功能已禁用。")
 
 
 # 处理群成员减少事件
@@ -237,16 +186,6 @@ async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
             )
             logger.info(f"用户 {user_id} 被拒绝加入群 {group_id}，原因：已退出过该群。")
             return
-    disallowed_keywords = group_data.get("disallowed_keywords", [])
-    if any(keyword in comment for keyword in disallowed_keywords):
-        await bot.set_group_add_request(
-            flag=flag,
-            sub_type=sub_type,
-            approve=False,
-            reason="你这个人，满脑子都只想着自己呢。",
-        )
-        logger.info(f"用户 {user_id} 被拒绝加入群 {group_id}，原因：关键词不允许。")
-        return
     await group_request_handler.send(f"收到加群请求：\n用户：{user_id} \n验证信息：{comment}")
     allowed_answers = group_data.get("allowed_keywords", [])
     if not allowed_answers:
