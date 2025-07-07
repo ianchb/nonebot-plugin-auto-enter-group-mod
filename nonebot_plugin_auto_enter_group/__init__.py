@@ -1,3 +1,4 @@
+import requests
 from nonebot import logger, on_command, on_notice, on_request
 from nonebot.adapters.onebot.v11 import Bot, GroupDecreaseNoticeEvent, GroupMessageEvent, GroupRequestEvent, Message
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
@@ -22,7 +23,6 @@ __plugin_meta__ = PluginMetadata(
     usage="""
         查看关键词：群主/管理员可查看入群关键词
         添加/删除允许关键词 <关键词>：添加/删除自动允许入群关键词
-        添加/删除拒绝关键词 <关键词>：添加/删除自动拒绝入群关键词
         入群答案自动进行关键词模糊匹配
         启用/禁用退群黑名单：启用/禁用本群退群黑名单，启用后退群用户将无法再次加入
     """,
@@ -164,6 +164,36 @@ async def handle_group_decrease(bot: Bot, event: GroupDecreaseNoticeEvent):
 group_request_handler = on_request(priority=1, block=False)
 
 
+async def verify_join_code_with_backend(join_code: str, qq_number: str) -> bool:
+    try:
+        response = requests.post(
+            'YOUR_BACKEND_SERVER',
+            json={
+                'join_code': join_code,
+                'qq_number': qq_number
+            },
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return data.get('success', False)
+        else:
+            logger.warning(f"后端验证入群码失败，状态码: {response.status_code}")
+            return False
+    except Exception as e:
+        logger.error(f"后端验证入群码时出错: {str(e)}")
+        return False
+
+
+def extract_join_code(comment: str) -> str:
+    """从验证信息中提取入群码"""
+    import re
+    pattern = r'\b[A-Z0-9\-_]{8}\b'
+    matches = re.findall(pattern, comment.upper())
+    return matches[0] if matches else ""
+
+
 @group_request_handler.handle()
 async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
     flag = event.flag
@@ -172,7 +202,9 @@ async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
         return
     group_id = str(event.group_id)
     user_id = str(event.user_id)
-    comment = event.comment.lower()  # type: ignore
+    comment = event.comment  # type: ignore
+    original_comment = comment
+    comment_lower = comment.lower()
     group_data = data["groups"].get(group_id, {})
     # 检查群组是否开启了退群记录功能
     if group_data.get("exit_records", {}).get("enabled", False):
@@ -186,15 +218,37 @@ async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
             )
             logger.info(f"用户 {user_id} 被拒绝加入群 {group_id}，原因：已退出过该群。")
             return
-    await group_request_handler.send(f"收到加群请求：\n用户：{user_id} \n验证信息：{comment}")
+
+    # 优先检查入群码验证
+    join_code = extract_join_code(original_comment)
+    if join_code:
+        logger.info(f"检测到入群码: {join_code}，开始验证...")
+        if await verify_join_code_with_backend(join_code, user_id):
+            await bot.set_group_add_request(flag=flag, sub_type=sub_type, approve=True, reason=" ")
+            logger.info(f"入群码验证成功，已批准用户 {user_id} 加入群 {group_id}")
+            await group_request_handler.finish(f"入群码验证成功，欢迎 {user_id} 来到本群！")
+        else:
+            await bot.set_group_add_request(
+                flag=flag,
+                sub_type=sub_type,
+                approve=False,
+                reason="入群码验证失败，请重新获取有效的入群码。",
+            )
+            logger.info(f"入群码验证失败，已拒绝用户 {user_id} 加入群 {group_id}")
+
+    # 如果没有入群码，则使用关键词匹配
     allowed_answers = group_data.get("allowed_keywords", [])
-    if not allowed_answers:
-        logger.warning(f"用户 {user_id} 尝试加入群 {group_id}，但该群没有设置关键词。")
-        await group_request_handler.finish("本群未设置关键词，无法自动处理。")
-    if any(keyword in comment for keyword in allowed_answers):
+
+    if any(keyword in comment_lower for keyword in allowed_answers):
         await bot.set_group_add_request(flag=flag, sub_type=sub_type, approve=True, reason=" ")
         logger.info("请求基于关键词匹配已批准。")
-        await group_request_handler.finish("判断成功，已自动批准入群。")
+        await group_request_handler.finish(f"关键词验证成功，欢迎 {user_id} 来到本群！")
     else:
-        logger.info("请求因关键词不匹配转入手动处理。")
-        await group_request_handler.finish("判断失败，请手动处理申请。")
+        # 如果不含允许关键词且群组有配置关键词，则拒绝
+        await bot.set_group_add_request(
+            flag=flag,
+            sub_type=sub_type,
+            approve=False,
+            reason="验证信息不符合要求，请提供正确的验证信息或入群码。",
+        )
+        logger.info(f"用户 {user_id} 被拒绝加入群 {group_id}，原因：验证信息不包含允许关键词且无有效入群码。")
