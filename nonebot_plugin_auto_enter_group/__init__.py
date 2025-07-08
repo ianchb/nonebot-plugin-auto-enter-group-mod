@@ -164,13 +164,14 @@ async def handle_group_decrease(bot: Bot, event: GroupDecreaseNoticeEvent):
 group_request_handler = on_request(priority=1, block=False)
 
 
-async def verify_join_code_with_backend(join_code: str, qq_number: str) -> bool:
+async def verify_join_code_with_backend(join_code: str, qq_number: str, group_number: str) -> bool:
     try:
         response = requests.post(
             'YOUR_BACKEND_SERVER',
             json={
                 'join_code': join_code,
-                'qq_number': qq_number
+                'qq_number': qq_number,
+                'group_number': group_number
             },
             timeout=10
         )
@@ -223,7 +224,7 @@ async def handle_first_receive(bot: Bot, event: GroupRequestEvent):
     join_code = extract_join_code(original_comment)
     if join_code:
         logger.info(f"检测到入群码: {join_code}，开始验证...")
-        if await verify_join_code_with_backend(join_code, user_id):
+        if await verify_join_code_with_backend(join_code, user_id, group_id):
             await bot.set_group_add_request(flag=flag, sub_type=sub_type, approve=True, reason=" ")
             logger.info(f"入群码验证成功，已批准用户 {user_id} 加入群 {group_id}")
             await group_request_handler.finish(f"入群码验证成功，欢迎 {user_id} 来到本群！")
