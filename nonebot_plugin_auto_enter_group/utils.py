@@ -25,6 +25,9 @@ def load_data():
                 if "keywords" in group_data:
                     group_data["allowed_keywords"] = group_data.pop("keywords")
                     migrated = True
+                if "allowed_verification_methods" not in group_data:
+                    group_data["allowed_verification_methods"] = ["A", "B", "C", "D"]
+                    migrated = True
             if migrated:
                 save_data(data)
                 logger.info("数据已迁移。")
@@ -55,7 +58,11 @@ def add_keyword_allowed(group_id, keyword):
     if not data:
         load_data()
     group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
+        group_id, {
+            "allowed_keywords": [],
+            "exit_records": {"enabled": False, "members": []},
+            "allowed_verification_methods": ["A", "B", "C", "D"]
+        }
     )
     if keyword not in group_data["allowed_keywords"]:  # 防止重复添加
         group_data["allowed_keywords"].append(keyword)
@@ -73,7 +80,11 @@ def remove_keyword_allowed(group_id, keyword):
     if not data:
         load_data()
     group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
+        group_id, {
+            "allowed_keywords": [],
+            "exit_records": {"enabled": False, "members": []},
+            "allowed_verification_methods": ["A", "B", "C", "D"]
+        }
     )
     if keyword in group_data["allowed_keywords"]:
         group_data["allowed_keywords"].remove(keyword)
@@ -105,8 +116,54 @@ def enable_exit_recording(group_id: str, enabled: bool):
     if not data:
         load_data()
     group_data = data["groups"].setdefault(
-        group_id, {"allowed_keywords": [], "exit_records": {"enabled": False, "members": []}}
+        group_id, {
+            "allowed_keywords": [],
+            "exit_records": {"enabled": False, "members": []},
+            "allowed_verification_methods": ["A", "B", "C", "D"]
+        }
     )
     group_data["exit_records"]["enabled"] = enabled
     save_data(data)
     logger.info(f"群组 {group_id} {'开启' if enabled else '关闭'} 退群黑名单。")
+
+
+def set_allowed_verification_methods(group_id: str, methods: list):
+    """设置允许的验证方式"""
+    global data
+    if not data:
+        load_data()
+
+    valid_methods = ["A", "B", "C", "D"]
+    methods = [m.upper() for m in methods if m.upper() in valid_methods]
+
+    if not methods:
+        logger.warning(f"无效的验证方式，必须是 {valid_methods} 中的一个或多个")
+        return False
+
+    group_data = data["groups"].setdefault(
+        group_id, {
+            "allowed_keywords": [],
+            "exit_records": {"enabled": False, "members": []},
+            "allowed_verification_methods": ["A", "B", "C", "D"]
+        }
+    )
+
+    group_data["allowed_verification_methods"] = methods
+    save_data(data)
+    logger.info(f"群组 {group_id} 设置允许的验证方式为: {', '.join(methods)}")
+    return True
+
+
+def get_allowed_verification_methods(group_id: str) -> list:
+    global data
+    if not data:
+        load_data()
+
+    group_data = data["groups"].get(group_id, {})
+    return group_data.get("allowed_verification_methods", ["A", "B", "C", "D"])
+
+
+def is_verification_method_allowed(group_id: str, method: str) -> bool:
+    allowed_methods = get_allowed_verification_methods(group_id)
+    return method.upper() in allowed_methods
+
